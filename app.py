@@ -419,4 +419,3 @@ elif menu == "Face Similarity":
             st.success("Mirip")
         else:
             st.error("Tidak Mirip")
-```
