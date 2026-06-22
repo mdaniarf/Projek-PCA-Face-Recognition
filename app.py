@@ -240,4 +240,99 @@ with tab1:
         st.image(mean_face, caption="Mean Face (Rata-rata)", use_container_width=True, clamp=True, channels="GRAY")
         
     with col_e:
-        fig, axes = plt.subplots(
+        fig, axes = plt.subplots(1, 5, figsize=(12, 3))
+        for i in range(5):
+            if i < len(pca.components_):
+                eigenface = pca.components_[i].reshape(100, 100)
+                axes[i].imshow(eigenface, cmap='gray')
+                axes[i].set_title(f"Eigenface #{i+1}")
+                axes[i].axis('off')
+        st.pyplot(fig)
+        
+    # Grafik akumulasi varians gambar
+    st.subheader("Cumulative Explained Variance Ratio")
+    cum_variance = np.cumsum(pca.explained_variance_ratio_)
+    st.line_chart(cum_variance)
+    st.caption(f"Informasi penting wajah yang berhasil dipertahankan dengan {n_components} dimensi: **{cum_variance[-1]*100:.2f}%**.")
+
+# ------------------------------------------------------------------------------
+# TAB 2: PENGUJIAN FOTO KECIL & FOTO BESAR (2 METODE)
+# ------------------------------------------------------------------------------
+with tab2:
+    st.header("Deteksi Kemiripan Antara Dua Foto")
+    st.write("Sistem mampu menerima input ukuran resolusi acak (**foto kecil maupun foto besar**). Sesuai Langkah 2 PPT, sistem akan otomatis melakukan *cropping wajah* dan *resizing* menjadi seragam.")
+    
+    c1, c2 = st.columns(2)
+    with c1:
+        file1 = st.file_uploader("Unggah Gambar Wajah Pertama (A)", type=["jpg", "png", "jpeg"], key="upload_1")
+    with c2:
+        file2 = st.file_uploader("Unggah Gambar Wajah Kedua (B)", type=["jpg", "png", "jpeg"], key="upload_2")
+        
+    if file1 and file2:
+        # Tulis file ke lokal sementara untuk dibaca OpenCV
+        with open("temp_a.jpg", "wb") as f: f.write(file1.read())
+        with open("temp_b.jpg", "wb") as f: f.write(file2.read())
+                
+        img_a_raw = cv2.imread("temp_a.jpg")
+        img_b_raw = cv2.imread("temp_b.jpg")
+        
+        # Panel Informasi pembuktian pelatihan ukuran gambar
+        st.warning(f"📐 **Uji Dimensi Awal**: Ukuran asli Gambar A adalah `{img_a_raw.shape[:2]}` | Ukuran asli Gambar B adalah `{img_b_raw.shape[:2]}`. "
+                   f"Kedua foto berhasil dipangkas dan diseragamkan lewat preprocessing menjadi `(100, 100)`.")
+        
+        # Ekstraksi fitur gambar input ke ruang PCA
+        feat_a = load_and_preprocess_image("temp_a.jpg").reshape(1, -1)
+        feat_b = load_and_preprocess_image("temp_b.jpg").reshape(1, -1)
+        
+        feat_a_pca = pca.transform(feat_a)[0]
+        feat_b_pca = pca.transform(feat_b)[0]
+        
+        # Hitung Nilai Jarak/Kesamaan berdasarkan 2 metode wajib (Langkah 6 PPT)
+        dist_euclidean, sim_cosine = calculate_metrics(feat_a_pca, feat_b_pca)
+        
+        # Tampilkan visualisasi perbandingan gambar asli berdampingan
+        col_img1, col_img2 = st.columns(2)
+        col_img1.image(cv2.cvtColor(img_a_raw, cv2.COLOR_BGR2RGB), caption="Gambar Wajah A", width=240)
+        col_img2.image(cv2.cvtColor(img_b_raw, cv2.COLOR_BGR2RGB), caption="Gambar Wajah B", width=240)
+        
+        # Tampilkan panel hasil kalkulasi metrik
+        st.subheader("⚖️ Perbandingan Hasil Keputusan Dua Metode")
+        res_col1, res_col2 = st.columns(2)
+        
+        with res_col1:
+            st.metric(label="Metode A: Jarak Euclidean (Jarak Kecil = Mirip)", value=f"{dist_euclidean:.4f}")
+            status_euclidean = "🟢 MIRIP" if dist_euclidean < euclidean_threshold else "🔴 TIDAK MIRIP"
+            st.write(f"Keputusan Sistem (Threshold < {euclidean_threshold}): **{status_euclidean}**")
+            
+        with res_col2:
+            st.metric(label="Metode B: Cosine Similarity (Mendekati 1 = Mirip)", value=f"{sim_cosine:.4f}")
+            status_cosine = "🟢 MIRIP" if sim_cosine >= cosine_threshold else "🔴 TIDAK MIRIP"
+            st.write(f"Keputusan Sistem (Threshold ≥ {cosine_threshold}): **{status_cosine}**")
+
+# ==============================================================================
+# 4. EVALUASI AKURASI SISTEM (TARGET KELULUSAN > 50%)
+# ==============================================================================
+with tab3:
+    st.header("Evaluasi Akurasi Seluruh Dataset Uji (Proporsi 20%)")
+    st.write("Sistem melakukan proses identifikasi silang pada seluruh data uji secara objektif untuk menentukan kebenaran prediksi kelas.")
+    
+    with st.spinner("Menghitung akurasi sistem..."):
+        acc_euclidean = evaluate_accuracy(X_train_pca, y_train, X_test_pca, y_test, method='euclidean')
+        acc_cosine = evaluate_accuracy(X_train_pca, y_train, X_test_pca, y_test, method='cosine')
+        
+    c_acc1, c_acc2 = st.columns(2)
+    with c_acc1:
+        st.subheader("Akurasi Menggunakan Metode Euclidean")
+        st.metric(label="Nilai Akurasi", value=f"{acc_euclidean:.2f} %")
+        if acc_euclidean > 50.0:
+            st.success("✅ Sukses: Akurasi di atas batas kelulusan target 50%!")
+        else:
+            st.error("❌ Target Belum Tercapai: Silakan atur kembali dataset Anda.")
+            
+    with c_acc2:
+        st.subheader("Akurasi Menggunakan Metode Cosine Similarity")
+        st.metric(label="Nilai Akurasi", value=f"{acc_cosine:.2f} %")
+        if acc_cosine > 50.0:
+            st.success("✅ Sukses: Akurasi di atas batas kelulusan target 50%!")
+        else:
+            st.error("❌ Target Belum Tercapai: Silakan atur kembali dataset Anda.")
