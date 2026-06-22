@@ -1,502 +1,174 @@
 import streamlit as st
-import cv2
 import numpy as np
-import os
-import re
-
-from PIL import Image
+import pandas as pd
+import matplotlib.pyplot as plt
+from pca_model import load_dataset_from_folder, calculate_metrics, evaluate_accuracy
 from sklearn.decomposition import PCA
-from sklearn.model_selection import train_test_split
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.metrics import accuracy_score
-from sklearn.metrics.pairwise import cosine_similarity
-from scipy.spatial.distance import euclidean
+import os
+import cv2
 
-# =====================================================
-# CONFIG
-# =====================================================
+st.set_page_config(page_title="PCA Face Recognition System", layout="wide")
 
-st.set_page_config(
-    page_title="Age Invariant Face Recognition",
-    layout="wide"
-)
+st.title("🧮 Sistem Deteksi Kemiripan Wajah Berbasis PCA/SVD")
+st.write("Aplikasi untuk mereduksi dimensi data wajah menjadi ruang Eigenfaces dan mendeteksi kemiripan wajah[cite: 2, 9, 10].")
 
-DATASET_PATH = "dataset"
+# Pilihan path dataset
+TRAIN_DIR = "data/train"
+TEST_DIR = "data/test"
 
-IMG_SIZE = (64, 64)
-
-MIN_AGE = 6
-MAX_AGE = 100
-
-# =====================================================
-# GET AGE
-# =====================================================
-
-def get_age(filename):
-
-    match = re.search(r"A(\d+)", filename)
-
-    if match:
-        return int(match.group(1))
-
-    return None
-
-# =====================================================
-# PREPROCESS
-# =====================================================
-
-def preprocess_image(path):
-
-    img = cv2.imread(path)
-
-    if img is None:
-        return None
-
-    gray = cv2.cvtColor(
-        img,
-        cv2.COLOR_BGR2GRAY
-    )
-
-    gray = cv2.equalizeHist(gray)
-
-    gray = cv2.resize(
-        gray,
-        IMG_SIZE
-    )
-
-    gray = gray.astype(np.float32) / 255.0
-
-    return gray.flatten()
-
-# =====================================================
-# LOAD DATASET
-# =====================================================
-
-def load_dataset():
-
-    X = []
-    y = []
-
-    if not os.path.exists(DATASET_PATH):
-        return np.array([]), np.array([])
-
-    persons = sorted(
-        os.listdir(DATASET_PATH)
-    )
-
-    for person in persons:
-
-        folder_path = os.path.join(
-            DATASET_PATH,
-            person
-        )
-
-        if not os.path.isdir(folder_path):
-            continue
-
-        files = os.listdir(folder_path)
-
-        for file in files:
-
-            if not file.lower().endswith(
-                (".jpg", ".jpeg", ".png")
-            ):
-                continue
-
-            age = get_age(file)
-
-            if age is None:
-                continue
-
-            if age < MIN_AGE:
-                continue
-
-            if age > MAX_AGE:
-                continue
-
-            image_path = os.path.join(
-                folder_path,
-                file
-            )
-
-            vector = preprocess_image(
-                image_path
-            )
-
-            if vector is None:
-                continue
-
-            X.append(vector)
-
-            # LABEL = IDENTITAS ORANG
-            y.append(person)
-
-    return np.array(X), np.array(y)
-
-# =====================================================
-# TRAIN MODEL
-# =====================================================
-
-@st.cache_resource
-def train_model():
-
-    X, y = load_dataset()
-
-    if len(X) == 0:
-        return None
-
-    unique, counts = np.unique(
-        y,
-        return_counts=True
-    )
-
-    min_count = counts.min()
-
-    if min_count >= 2:
-
-        X_train, X_test, y_train, y_test = train_test_split(
-            X,
-            y,
-            test_size=0.2,
-            random_state=42,
-            stratify=y
-        )
-
-    else:
-
-        X_train, X_test, y_train, y_test = train_test_split(
-            X,
-            y,
-            test_size=0.2,
-            random_state=42
-        )
-
-    n_components = min(
-        40,
-        X_train.shape[0] - 1,
-        X_train.shape[1]
-    )
-
-    pca = PCA(
-        n_components=n_components,
-        whiten=True
-    )
-
-    X_train_pca = pca.fit_transform(
-        X_train
-    )
-
-    X_test_pca = pca.transform(
-        X_test
-    )
-
-    knn = KNeighborsClassifier(
-        n_neighbors=3,
-        weights="distance"
-    )
-
-    knn.fit(
-        X_train_pca,
-        y_train
-    )
-
-    pred = knn.predict(
-        X_test_pca
-    )
-
-    acc = accuracy_score(
-        y_test,
-        pred
-    )
-
-    return (
-        pca,
-        knn,
-        acc,
-        X,
-        y
-    )
-
-# =====================================================
-# LOAD MODEL
-# =====================================================
-
-model = train_model()
-
-if model is None:
-
-    st.error(
-        "Dataset tidak ditemukan atau kosong."
-    )
-
+# Validasi Folder Data
+if not os.path.exists(TRAIN_DIR) or len(os.listdir(TRAIN_DIR)) == 0:
+    st.error("⚠️ Silakan kumpulkan dataset di folder `data/train` dan `data/test` terlebih dahulu!")
     st.stop()
 
-pca, knn, acc, X_all, y_all = model
+# Load Data & Cache agar performa cepat
+@st.cache_data
+def get_cached_data():
+    X_train, y_train = load_dataset_from_folder(TRAIN_DIR)
+    X_test, y_test = load_dataset_from_folder(TEST_DIR)
+    return X_train, y_train, X_test, y_test
 
-# =====================================================
-# SIDEBAR
-# =====================================================
+X_train, y_train, X_test, y_test = get_cached_data()
 
-menu = st.sidebar.radio(
-    "Menu",
-    [
-        "Home",
-        "EDA",
-        "Recognize Person",
-        "Face Similarity"
-    ]
-)
+# ==========================================
+# SIDEBAR: Pengaturan Parameter & Komponen Utama
+# ==========================================
+st.sidebar.header("⚙️ Konfigurasi Model PCA")
+n_components = st.sidebar.slider("Jumlah Komponen Utama ($k$)", 5, 100, 50) # Default 50 sesuai dokumen [cite: 76, 178]
+euclidean_threshold = st.sidebar.slider("Threshold Euclidean Distance", 1.0, 50.0, 15.0) # [cite: 127]
+cosine_threshold = st.sidebar.slider("Threshold Cosine Similarity", 0.0, 1.0, 0.75)
 
-# =====================================================
-# HOME
-# =====================================================
+# Training Model PCA
+pca = PCA(n_components=n_components)
+X_train_pca = pca.fit_transform(X_train) # [cite: 179]
+X_test_pca = pca.transform(X_test)
 
-if menu == "Home":
+# ==========================================
+# TAB 1: EDA (Exploratory Data Analysis) & Eigenfaces
+# ==========================================
+tab1, tab2, tab3 = st.tabs(["📊 Analisis Data (EDA)", "📸 Pengujian Kemiripan Wajah", "📈 Evaluasi & Akurasi"])
 
-    st.title(
-        "Age Invariant Face Recognition Using PCA"
-    )
-
-    st.markdown("---")
-
+with tab1:
+    st.header("Exploratory Data Analysis (EDA)")
+    
     col1, col2 = st.columns(2)
-
     with col1:
-
-        st.metric(
-            "Total Images",
-            len(X_all)
-        )
-
+        st.subheader("Informasi Dimensi Data")
+        df_info = pd.DataFrame({
+            "Metrik Data": ["Jumlah Sampel Latih (m)", "Jumlah Sampel Uji", "Fitur Asli (Piksel n)", "Fitur Tereduksi (k)"],
+            "Nilai": [X_train.shape[0], X_test.shape[0], X_train.shape[1], n_components] # [cite: 52, 53, 180, 181]
+        })
+        st.table(df_info)
+        
     with col2:
+        st.subheader("Distribusi Kelas Gambar Latih")
+        unique_labels, counts = np.unique(y_train, return_counts=True)
+        st.bar_chart(pd.DataFrame({"Jumlah Foto": counts}, index=unique_labels))
 
-        st.metric(
-            "Accuracy",
-            f"{acc*100:.2f}%"
-        )
+    st.write("---")
+    st.subheader("Visualisasi Hubungan SVD: Wajah Rata-rata & Eigenfaces")
+    
+    # Visualisasi Mean Face [cite: 62]
+    mean_face = pca.mean_.reshape(100, 100)
+    
+    col_m, col_e = st.columns([1, 3])
+    with col_m:
+        st.image(mean_face, caption="Mean Face (Wajah Rata-rata)", use_container_width=True, clamp=True, channels="GRAY")
+        
+    with col_e:
+        # Tampilkan 5 Eigenfaces pertama [cite: 71, 249]
+        fig, axes = plt.subplots(1, 5, figsize=(10, 3))
+        for i in range(5):
+            if i < len(pca.components_):
+                eigenface = pca.components_[i].reshape(100, 100)
+                axes[i].imshow(eigenface, cmap='gray')
+                axes[i].set_title(f"Eigen #{i+1}")
+                axes[i].axis('off')
+        st.pyplot(fig)
+        
+    # Cumulative Explained Variance
+    st.subheader("Cumulative Explained Variance Ratio")
+    cum_variance = np.cumsum(pca.explained_variance_ratio_) # [cite: 182]
+    st.line_chart(cum_variance)
+    st.info(f"Total informasi (variance) yang dipertahankan dengan {n_components} komponen: **{cum_variance[-1]*100:.2f}%** [cite: 9, 182]")
 
-# =====================================================
-# EDA
-# =====================================================
-
-elif menu == "EDA":
-
-    st.title(
-        "Exploratory Data Analysis"
-    )
-
-    unique, counts = np.unique(
-        y_all,
-        return_counts=True
-    )
-
-    st.subheader(
-        "Jumlah Foto per Individu"
-    )
-
-    for person, count in zip(
-        unique,
-        counts
-    ):
-
-        st.write(
-            f"{person} : {count} foto"
-        )
-
-# =====================================================
-# RECOGNIZE PERSON
-# =====================================================
-
-elif menu == "Recognize Person":
-
-    st.title(
-        "Recognize Person"
-    )
-
-    uploaded = st.file_uploader(
-        "Upload Wajah",
-        type=[
-            "jpg",
-            "jpeg",
-            "png"
-        ]
-    )
-
-    if uploaded:
-
-        image = Image.open(
-            uploaded
-        )
-
-        st.image(
-            image,
-            width=300
-        )
-
-        img = np.array(
-            image
-        )
-
-        gray = cv2.cvtColor(
-            img,
-            cv2.COLOR_RGB2GRAY
-        )
-
-        gray = cv2.equalizeHist(
-            gray
-        )
-
-        gray = cv2.resize(
-            gray,
-            IMG_SIZE
-        )
-
-        gray = gray.astype(
-            np.float32
-        ) / 255.0
-
-        vector = gray.flatten()
-
-        vector_pca = pca.transform(
-            vector.reshape(1, -1)
-        )
-
-        prediction = knn.predict(
-            vector_pca
-        )[0]
-
-        distance, _ = knn.kneighbors(
-            vector_pca,
-            n_neighbors=1
-        )
-
-        confidence = max(
-            0,
-            100 - distance[0][0] * 10
-        )
-
-        st.success(
-            f"Identitas : {prediction}"
-        )
-
-        st.info(
-            f"Confidence : {confidence:.2f}%"
-        )
-
-# =====================================================
-# FACE SIMILARITY
-# =====================================================
-
-elif menu == "Face Similarity":
-
-    st.title(
-        "Face Similarity"
-    )
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-
-        file1 = st.file_uploader(
-            "Foto Pertama",
-            type=[
-                "jpg",
-                "jpeg",
-                "png"
-            ],
-            key="img1"
-        )
-
-    with col2:
-
-        file2 = st.file_uploader(
-            "Foto Kedua",
-            type=[
-                "jpg",
-                "jpeg",
-                "png"
-            ],
-            key="img2"
-        )
-
+# ==========================================
+# TAB 2: Pengujian Kemiripan Wajah (2 Metode Wajib + Uji Ukuran Foto)
+# ==========================================
+with tab2:
+    st.header("Deteksi Kemiripan Antara Dua Foto Wajah")
+    st.write("Silakan unggah 2 gambar acak untuk membandingkan kemiripannya. Sistem akan secara otomatis melakukan resizing (menangani foto besar maupun foto kecil)[cite: 39, 42].")
+    
+    c1, c2 = st.columns(2)
+    with c1:
+        file1 = st.file_uploader("Unggah Gambar Wajah A", type=["jpg", "png", "jpeg"], key="img1")
+    with c2:
+        file2 = st.file_uploader("Unggah Gambar Wajah B", type=["jpg", "png", "jpeg"], key="img2")
+        
     if file1 and file2:
+        # Simpan sementara file unggahan untuk diproses cv2
+        for f, name in zip([file1, file2], ["temp_a.jpg", "temp_b.jpg"]):
+            with open(name, "wb") as buffer:
+                buffer.write(f.read())
+                
+        # Menjawab poin 4: Menguji foto kecil vs foto besar
+        img_a_raw = cv2.imread("temp_a.jpg")
+        img_b_raw = cv2.imread("temp_b.jpg")
+        
+        st.warning(f"📐 **Ukuran Awal Gambar**: Wajah A berukuran `{img_a_raw.shape[:2]}` | Wajah B berukuran `{img_b_raw.shape[:2]}`. Sistem akan menyeragamkannya menjadi `(100, 100)` melalui tahap Preprocessing[cite: 39, 42].")
+        
+        # Ekstraksi Fitur via Model PCA
+        feat_a = load_and_preprocess_image("temp_a.jpg").reshape(1, -1)
+        feat_b = load_and_preprocess_image("temp_b.jpg").reshape(1, -1)
+        
+        feat_a_pca = pca.transform(feat_a)[0] # [cite: 198]
+        feat_b_pca = pca.transform(feat_b)[0] # [cite: 199]
+        
+        # Hitung Menggunakan 2 Metode Berbeda [cite: 95, 97]
+        dist_euclidean, sim_cosine = calculate_metrics(feat_a_pca, feat_b_pca)
+        
+        # Tampilkan Hasil Visualisasi Berdampingan
+        col_img1, col_img2 = st.columns(2)
+        col_img1.image(cv2.cvtColor(img_a_raw, cv2.COLOR_BGR2RGB), caption="Wajah A (Asli)", width=250)
+        col_img2.image(cv2.cvtColor(img_b_raw, cv2.COLOR_BGR2RGB), caption="Wajah B (Asli)", width=250)
+        
+        # Tampilkan Hasil Perhitungan Kemiripan
+        st.subheader("📊 Hasil Perbandingan")
+        res_col1, res_col2 = st.columns(2)
+        
+        with res_col1:
+            st.metric(label="Metode A: Jarak Euclidean", value=f"{dist_euclidean:.4f}") # [cite: 98]
+            status_euclidean = "🟢 MIRIP" if dist_euclidean < euclidean_threshold else "🔴 TIDAK MIRIP" # [cite: 121, 123]
+            st.write(f"Keputusan (Threshold < {euclidean_threshold}): **{status_euclidean}** [cite: 119, 120]")
+            
+        with res_col2:
+            st.metric(label="Metode B: Cosine Similarity", value=f"{sim_cosine:.4f}") # [cite: 108]
+            status_cosine = "🟢 MIRIP" if sim_cosine >= cosine_threshold else "🔴 TIDAK MIRIP" # [cite: 132, 133]
+            st.write(f"Keputusan (Threshold ≥ {cosine_threshold}): **{status_cosine}** [cite: 131]")
 
-        img1 = np.array(
-            Image.open(file1)
-        )
-
-        img2 = np.array(
-            Image.open(file2)
-        )
-
-        gray1 = cv2.cvtColor(
-            img1,
-            cv2.COLOR_RGB2GRAY
-        )
-
-        gray2 = cv2.cvtColor(
-            img2,
-            cv2.COLOR_RGB2GRAY
-        )
-
-        gray1 = cv2.equalizeHist(
-            gray1
-        )
-
-        gray2 = cv2.equalizeHist(
-            gray2
-        )
-
-        gray1 = cv2.resize(
-            gray1,
-            IMG_SIZE
-        )
-
-        gray2 = cv2.resize(
-            gray2,
-            IMG_SIZE
-        )
-
-        vec1 = gray1.flatten() / 255.0
-        vec2 = gray2.flatten() / 255.0
-
-        vec1_pca = pca.transform(
-            vec1.reshape(1, -1)
-        )
-
-        vec2_pca = pca.transform(
-            vec2.reshape(1, -1)
-        )
-
-        cosine = cosine_similarity(
-            vec1_pca,
-            vec2_pca
-        )[0][0]
-
-        distance = euclidean(
-            vec1_pca[0],
-            vec2_pca[0]
-        )
-
-        st.metric(
-            "Cosine Similarity",
-            f"{cosine:.4f}"
-        )
-
-        st.metric(
-            "Euclidean Distance",
-            f"{distance:.4f}"
-        )
-
-        if cosine >= 0.80:
-
-            st.success(
-                "Kemungkinan orang yang sama"
-            )
-
+# ==========================================
+# TAB 3: Pengujian Akurasi Sistem (Target Sukses > 50%)
+# ==========================================
+with tab3:
+    st.header("Evaluasi Akurasi Seluruh Dataset Uji (20%)")
+    st.write("Sistem melakukan uji validasi silang otomatis membandingkan performa akurasi antara metode Euclidean & Cosine Similarity.")
+    
+    acc_euclidean = evaluate_accuracy(X_train_pca, y_train, X_test_pca, y_test, method='euclidean', threshold=euclidean_threshold)
+    acc_cosine = evaluate_accuracy(X_train_pca, y_train, X_test_pca, y_test, method='cosine', threshold=cosine_threshold)
+    
+    c_acc1, c_acc2 = st.columns(2)
+    with c_acc1:
+        st.subheader("Akurasi Sistem (Metode Euclidean)")
+        st.header(f"{acc_euclidean:.2f} %")
+        if acc_euclidean > 50.0:
+            st.success("✅ Target sukses terpenuhi (>50%)")
         else:
-
-            st.error(
-                "Kemungkinan orang berbeda"
-            )
-
+            st.error("❌ Akurasi di bawah 50%, atur ulang parameter slider di sidebar.")
+            
+    with c_acc2:
+        st.subheader("Akurasi Sistem (Metode Cosine Similarity)")
+        st.header(f"{acc_cosine:.2f} %")
+        if acc_cosine > 50.0:
+            st.success("✅ Target sukses terpenuhi (>50%)")
+        else:
+            st.error("❌ Akurasi di bawah 50%, atur ulang parameter slider di sidebar.")
