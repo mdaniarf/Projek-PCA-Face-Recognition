@@ -211,4 +211,63 @@ with tab2:
     st.header("Deteksi Kemiripan Antara Dua Foto")
     
     c1, c2 = st.columns(2)
-    with c1: file1 = st.file_uploader("Unggah Gambar
+    with c1: 
+        file1 = st.file_uploader("Unggah Gambar Wajah Pertama (A)", type=["jpg", "png", "jpeg"], key="upload_1")
+    with c2: 
+        file2 = st.file_uploader("Unggah Gambar Wajah Kedua (B)", type=["jpg", "png", "jpeg"], key="upload_2")
+        
+    if file1 and file2:
+        with open("temp_a.jpg", "wb") as f: f.write(file1.read())
+        with open("temp_b.jpg", "wb") as f: f.write(file2.read())
+                
+        feat_a = load_and_preprocess_image("temp_a.jpg").reshape(1, -1)
+        feat_b = load_and_preprocess_image("temp_b.jpg").reshape(1, -1)
+        
+        feat_a_pca = pca.transform(feat_a)[0]
+        feat_b_pca = pca.transform(feat_b)[0]
+        
+        dist_euclidean, sim_cosine = calculate_metrics(feat_a_pca, feat_b_pca)
+        
+        st.image([cv2.cvtColor(cv2.imread("temp_a.jpg"), cv2.COLOR_BGR2RGB), cv2.cvtColor(cv2.imread("temp_b.jpg"), cv2.COLOR_BGR2RGB)], width=240, caption=["Wajah A", "Wajah B"])
+        
+        st.subheader("⚖️ Perbandingan Hasil Keputusan Dua Metode")
+        res_col1, res_col2 = st.columns(2)
+        
+        with res_col1:
+            st.metric(label="Metode A: Jarak Euclidean", value=f"{dist_euclidean:.4f}")
+            status_euclidean = "🟢 MIRIP" if dist_euclidean < euclidean_threshold else "🔴 TIDAK MIRIP"
+            st.write(f"Keputusan Sistem (Threshold < {euclidean_threshold}): **{status_euclidean}**")
+            
+        with res_col2:
+            st.metric(label="Metode B: Cosine Similarity", value=f"{sim_cosine:.4f}")
+            status_cosine = "🟢 MIRIP" if sim_cosine >= cosine_threshold else "🔴 TIDAK MIRIP"
+            st.write(f"Keputusan Sistem (Threshold ≥ {cosine_threshold}): **{status_cosine}**")
+
+# ------------------------------------------------------------------------------
+# TAB 3: EVALUASI AKURASI SISTEM DENGAN THRESHOLD DYNAMIC
+# ------------------------------------------------------------------------------
+with tab3:
+    st.header("Evaluasi Akurasi Seluruh Dataset Uji (Proporsi 20%)")
+    
+    if len(X_test_pca) > 0:
+        acc_euclidean = evaluate_accuracy_with_threshold(X_train_pca, y_train, X_test_pca, y_test, method='euclidean', threshold=euclidean_threshold)
+        acc_cosine = evaluate_accuracy_with_threshold(X_train_pca, y_train, X_test_pca, y_test, method='cosine', threshold=cosine_threshold)
+            
+        c_acc1, c_acc2 = st.columns(2)
+        with c_acc1:
+            st.subheader("Akurasi Menggunakan Metode Euclidean")
+            st.metric(label="Nilai Akurasi", value=f"{acc_euclidean:.2f} %")
+            if acc_euclidean >= 50.0:
+                st.success("✅ Sukses: Akurasi di atas batas kelulusan target 50%!")
+            else:
+                st.error("❌ Target Belum Tercapai: Silakan naikkan slider 'Threshold Jarak Euclidean' ke arah kanan (misal: 55-65).")
+                
+        with c_acc2:
+            st.subheader("Akurasi Menggunakan Metode Cosine Similarity")
+            st.metric(label="Nilai Akurasi", value=f"{acc_cosine:.2f} %")
+            if acc_cosine >= 50.0:
+                st.success("✅ Sukses: Akurasi di atas batas kelulusan target 50%!")
+            else:
+                st.error("❌ Target Belum Tercapai: Silakan turunkan slider 'Threshold Cosine Similarity' ke arah kiri (misal: 0.15-0.25).")
+    else:
+        st.warning("Matriks data uji kosong, pastikan isi folder dataset sudah benar.")
