@@ -118,3 +118,97 @@ def evaluate_accuracy_with_threshold(X_train_pca, train_labels, X_test_pca, test
     total = len(X_test_pca)
     
     for i, test_vec in enumerate(X_test_pca):
+        if method == 'cosine':
+            similarities = cosine_similarity(test_vec.reshape(1, -1), X_train_pca)[0]
+            best_idx = np.argmax(similarities)
+            best_sim = similarities[best_idx]
+            
+            if best_sim >= threshold:
+                pred_label = train_labels[best_idx]
+            else:
+                pred_label = "Tidak Dikenal"
+        else:
+            distances = np.linalg.norm(X_train_pca - test_vec, axis=1)
+            best_idx = np.argmin(distances)
+            best_dist = distances[best_idx]
+            
+            if best_dist < threshold:
+                pred_label = train_labels[best_idx]
+            else:
+                pred_label = "Tidak Dikenal"
+                
+        if pred_label == test_labels[i]:
+            correct += 1
+            
+    return (correct / total) * 100
+
+# ==============================================================================
+# 3. INTERFACES & UI/UX (STREAMLIT)
+# ==============================================================================
+st.title("🧮 Sistem Deteksi Kemiripan Wajah Berbasis PCA/SVD")
+st.write("Aplikasi GUI interaktif untuk mereduksi dimensi data wajah menjadi ruang Eigenfaces serta menguji kemiripannya.")
+
+# Memastikan folder data latih dan uji sudah terbagi dengan benar di awal program
+if not os.path.exists(TRAIN_DIR) or len(os.listdir(TRAIN_DIR)) == 0:
+    split_faces_dataset(RAW_DIR, TRAIN_DIR, TEST_DIR)
+
+# Load awal dataset untuk kalkulasi jumlah sample
+X_train_raw, y_train = load_dataset_from_folder(TRAIN_DIR)
+X_test_raw, y_test = load_dataset_from_folder(TEST_DIR)
+
+# Sidebar - Konfigurasi Parameter Interaktif
+st.sidebar.header("⚙️ Konfigurasi Model PCA")
+
+# Proteksi matematika: Jumlah n_components tidak boleh melebihi total sample gambar latih Anda
+max_components = max(2, min(len(X_train_raw), 100))
+n_components = st.sidebar.slider("Jumlah Komponen Utama ($k$)", 2, max_components, min(10, max_components))
+
+# Konfigurasi Slider Threshold Pendekatan Jarak/Kesamaan
+euclidean_threshold = st.sidebar.slider("Threshold Jarak Euclidean", 1.0, 100.0, 45.0)  
+cosine_threshold = st.sidebar.slider("Threshold Cosine Similarity", -1.0, 1.0, 0.25)      
+
+# Ekstraksi Fitur Menggunakan PCA / SVD
+pca = PCA(n_components=n_components, svd_solver='full')
+X_train_pca = pca.fit_transform(X_train_raw) if len(X_train_raw) > 0 else np.array([])
+X_test_pca = pca.transform(X_test_raw) if len(X_test_raw) > 0 else np.array([])
+
+# Membuat Tab Tampilan UI/UX
+tab1, tab2, tab3 = st.tabs(["📊 Analisis Data Terbuka (EDA)", "📸 Pengujian Kemiripan Gambar", "📈 Evaluasi Akurasi Sistem"])
+
+# ------------------------------------------------------------------------------
+# TAB 1: EDA (EXPLORATORY DATA ANALYSIS)
+# ------------------------------------------------------------------------------
+with tab1:
+    st.header("Exploratory Data Analysis (EDA)")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.subheader("Informasi Dimensi Matriks Data")
+        if len(X_train_raw) > 0:
+            df_info = pd.DataFrame({
+                "Deskripsi Metrik Data": [
+                    "Jumlah Gambar Data Latih ($m$)",
+                    "Jumlah Gambar Data Uji", 
+                    "Dimensi Fitur Piksel Asli ($n$)",
+                    "Dimensi Fitur Tereduksi setelah PCA ($k$)"
+                ],
+                "Nilai Ukuran": [int(X_train_raw.shape[0]), int(X_test_raw.shape[0]), int(X_train_raw.shape[1]), int(n_components)]
+            })
+            st.table(df_info)
+        else:
+            st.warning("Data latih belum siap.")
+        
+    with col2:
+        st.subheader("Distribusi Jumlah Foto Per Identitas")
+        if len(y_train) > 0:
+            unique_labels, counts = np.unique(y_train, return_counts=True)
+            chart_data = pd.DataFrame({"Jumlah Sampel Foto": counts}, index=unique_labels)
+            st.bar_chart(chart_data)
+
+# ------------------------------------------------------------------------------
+# TAB 2: PENGUJIAN KEMIRIPAN GAMBAR INDIVIDUAL
+# ------------------------------------------------------------------------------
+with tab2:
+    st.header("Deteksi Kemiripan Antara Dua Foto")
+    
+    c1, c2 = st.columns(2)
+    with c1: file1 = st.file_uploader("Unggah Gambar
