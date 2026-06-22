@@ -5,7 +5,6 @@ import random
 import numpy as np
 import pandas as pd
 import streamlit as st
-import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
 from sklearn.metrics.pairwise import cosine_similarity
 
@@ -15,14 +14,41 @@ st.set_page_config(page_title="PCA Face Recognition System", layout="wide")
 # ==============================================================================
 # 1. KONSTANTA & CONFIGURATION
 # ==============================================================================
-IMG_SIZE = (100, 100)  # Ukuran standar sesuai Langkah 2 dokumen
-RAW_DIR = "dataset"     # Folder dataset utama Anda
+IMG_SIZE = (100, 100)  # Ukuran standar sesuai Langkah 2 dokumen [cite: 42, 149]
+RAW_DIR = "dataset"     # Folder dataset utama Anda [cite: 176]
 TRAIN_DIR = "data/train"
 TEST_DIR = "data/test"
 
+# Load detektor wajah Haar Cascade bawaan OpenCV 
+face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+
 # ==============================================================================
-# 2. FUNGSI UTAMA BACKEND (PREPROCESSING, PCA, & EVALUASI)
+# 2. FUNGSI UTAMA BACKEND (CROP, PREPROCESSING, PCA, & EVALUASI)
 # ==============================================================================
+def detect_and_crop_face(image_path):
+    """Mendeteksi wajah dari gambar, lalu mengembalikan crop wajah sesuai Langkah Dokumen Halaman 13""" [cite: 259]
+    img = cv2.imread(image_path)
+    if img is None:
+        raise ValueError(f"Gambar tidak ditemukan: {image_path}") [cite: 154]
+    
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) [cite: 155]
+    
+    # Deteksi lokasi koordinat wajah 
+    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=4)
+    
+    # Jika wajah terdeteksi, potong (crop) hanya bagian wajahnya saja [cite: 259, 260]
+    if len(faces) > 0:
+        x, y, w, h = faces[0] [cite: 260]
+        face_crop = gray[y:y+h, x:x+w] [cite: 260]
+    else:
+        # Fallback: jika ekspresi/pencahayaan ekstrem membuat Haar Cascade gagal, gunakan gambar utuh
+        face_crop = gray
+        
+    face_resized = cv2.resize(face_crop, IMG_SIZE) [cite: 260]
+    face_normalized = face_resized / 255.0 [cite: 260]
+    
+    return face_normalized.flatten() [cite: 260]
+
 def split_faces_dataset(source_dir, train_dir, test_dir, split_ratio=0.8):
     """Membagi dataset per folder identitas menjadi data latih 80% dan data uji 20%"""
     if not os.path.exists(source_dir):
@@ -43,7 +69,7 @@ def split_faces_dataset(source_dir, train_dir, test_dir, split_ratio=0.8):
         os.makedirs(os.path.join(test_dir, person_folder), exist_ok=True)
         
         images = [f for f in os.listdir(person_path) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
-        random.seed(42)  # Lock seed agar pembagian data konsisten
+        random.seed(42)  # Lock seed agar pembagian data latih dan uji konsisten
         random.shuffle(images)
         
         split_idx = int(len(images) * split_ratio)
@@ -59,26 +85,8 @@ def split_faces_dataset(source_dir, train_dir, test_dir, split_ratio=0.8):
             shutil.copy(os.path.join(person_path, img), os.path.join(test_dir, person_folder, img))
     return True
 
-def load_and_preprocess_image(image_path):
-    """Langkah 2 Dokumen: Mengubah ke grayscale, resize, normalisasi, dan flatten"""
-    img = cv2.imread(image_path)
-    if img is None:
-        raise ValueError(f"Gambar tidak ditemukan: {image_path}")
-    
-    # 1. Mengubah gambar menjadi grayscale
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    
-    # 2. Melakukan resize ke ukuran standar (100x100)
-    resized = cv2.resize(gray, IMG_SIZE)
-    
-    # 3. Melakukan normalisasi nilai piksel (0-1)
-    normalized = resized / 255.0
-    
-    # 4. Melakukan flatten menjadi vektor 1D
-    return normalized.flatten()
-
 def load_dataset_from_folder(dir_path):
-    """Langkah 3 Dokumen: Membentuk Matriks Data X"""
+    """Langkah 3 Dokumen: Membentuk Matriks Data X dengan optimasi Face Detection""" [cite: 47, 262, 263]
     X = []
     labels = []
     if not os.path.exists(dir_path):
@@ -90,28 +98,29 @@ def load_dataset_from_folder(dir_path):
             continue
         
         for filename in os.listdir(person_folder):
-            if filename.lower().endswith((".jpg", ".jpeg", ".png")):
-                img_path = os.path.join(person_folder, filename)
+            if filename.lower().endswith((".jpg", ".jpeg", ".png")): [cite: 170]
+                img_path = os.path.join(person_folder, filename) [cite: 170]
                 try:
-                    vector = load_and_preprocess_image(img_path)
-                    X.append(vector)
-                    labels.append(person_name)
+                    # Menggunakan deteksi wajah otomatis agar akurasi meningkat pesat
+                    vector = detect_and_crop_face(img_path)
+                    X.append(vector) [cite: 172]
+                    labels.append(person_name) [cite: 173]
                 except:
                     continue
-    return np.array(X), np.array(labels)
+    return np.array(X), np.array(labels) [cite: 174]
 
 def calculate_metrics(face_1_pca, face_2_pca):
-    """Menghitung kemiripan menggunakan 2 metode wajib dokumen"""
-    # Metode A: Euclidean Distance
-    euclidean_dist = np.linalg.norm(face_1_pca - face_2_pca)
+    """Menghitung kemiripan menggunakan 2 metode wajib dokumen""" [cite: 95, 97]
+    # Metode A: Euclidean Distance [cite: 98]
+    euclidean_dist = np.linalg.norm(face_1_pca - face_2_pca) [cite: 105]
     
-    # Metode B: Cosine Similarity
-    cos_sim = cosine_similarity(face_1_pca.reshape(1, -1), face_2_pca.reshape(1, -1))[0][0]
+    # Metode B: Cosine Similarity [cite: 108]
+    cos_sim = cosine_similarity(face_1_pca.reshape(1, -1), face_2_pca.reshape(1, -1))[0][0] [cite: 111]
     
     return euclidean_dist, cos_sim
 
 def evaluate_accuracy_with_threshold(X_train_pca, train_labels, X_test_pca, test_labels, method='cosine', threshold=0.50):
-    """Mengukur akurasi dengan mempertimbangkan nilai ambang batas (Threshold) secara dinamis"""
+    """Mengukur akurasi dengan mempertimbangkan nilai ambang batas (Threshold) secara dinamis""" [cite: 119]
     if len(X_test_pca) == 0:
         return 0.0
     correct = 0
@@ -123,16 +132,16 @@ def evaluate_accuracy_with_threshold(X_train_pca, train_labels, X_test_pca, test
             best_idx = np.argmax(similarities)
             best_sim = similarities[best_idx]
             
-            if best_sim >= threshold:
+            if best_sim >= threshold: [cite: 132]
                 pred_label = train_labels[best_idx]
             else:
-                pred_label = "Tidak Dikenal"
+                pred_label = "Tidak Dikenal" [cite: 226]
         else:
             distances = np.linalg.norm(X_train_pca - test_vec, axis=1)
             best_idx = np.argmin(distances)
             best_dist = distances[best_idx]
             
-            if best_dist < threshold:
+            if best_dist < threshold: [cite: 121]
                 pred_label = train_labels[best_idx]
             else:
                 pred_label = "Tidak Dikenal"
@@ -145,32 +154,32 @@ def evaluate_accuracy_with_threshold(X_train_pca, train_labels, X_test_pca, test
 # ==============================================================================
 # 3. INTERFACES & UI/UX (STREAMLIT)
 # ==============================================================================
-st.title("🧮 Sistem Deteksi Kemiripan Wajah Berbasis PCA/SVD")
-st.write("Aplikasi GUI interaktif untuk mereduksi dimensi data wajah menjadi ruang Eigenfaces serta menguji kemiripannya.")
+st.title("🧮 Sistem Deteksi Kemiripan Wajah Berbasis PCA/SVD") [cite: 1]
+st.write("Aplikasi GUI interaktif untuk mereduksi dimensi data wajah menjadi ruang Eigenfaces serta menguji kemiripannya.") [cite: 9, 10]
 
-# Memastikan folder data latih dan uji sudah terbagi dengan benar di awal program
+# Memastikan pemecahan folder dataset 80:20 berjalan dengan benar di awal program
 if not os.path.exists(TRAIN_DIR) or len(os.listdir(TRAIN_DIR)) == 0:
     split_faces_dataset(RAW_DIR, TRAIN_DIR, TEST_DIR)
 
-# Load awal dataset untuk kalkulasi jumlah sample
+# Load awal dataset latih dan uji
 X_train_raw, y_train = load_dataset_from_folder(TRAIN_DIR)
 X_test_raw, y_test = load_dataset_from_folder(TEST_DIR)
 
 # Sidebar - Konfigurasi Parameter Interaktif
 st.sidebar.header("⚙️ Konfigurasi Model PCA")
 
-# Proteksi matematika: Jumlah n_components tidak boleh melebihi total sample gambar latih Anda
+# Batasi n_components secara aman berdasarkan total jumlah sampel gambar latih
 max_components = max(2, min(len(X_train_raw), 100))
-n_components = st.sidebar.slider("Jumlah Komponen Utama ($k$)", 2, max_components, min(10, max_components))
+n_components = st.sidebar.slider("Jumlah Komponen Utama ($k$)", 2, max_components, min(5, max_components))
 
-# Konfigurasi Slider Threshold Pendekatan Jarak/Kesamaan
-euclidean_threshold = st.sidebar.slider("Threshold Jarak Euclidean", 1.0, 100.0, 45.0)  
-cosine_threshold = st.sidebar.slider("Threshold Cosine Similarity", -1.0, 1.0, 0.25)      
+# Konfigurasi Slider Threshold Pendekatan Jarak/Kesamaan [cite: 119]
+euclidean_threshold = st.sidebar.slider("Threshold Jarak Euclidean", 1.0, 100.0, 55.0)  
+cosine_threshold = st.sidebar.slider("Threshold Cosine Similarity", -1.0, 1.0, 0.15)      
 
-# Ekstraksi Fitur Menggunakan PCA / SVD
+# Ekstraksi Fitur Menggunakan PCA / SVD [cite: 1]
 pca = PCA(n_components=n_components, svd_solver='full')
-X_train_pca = pca.fit_transform(X_train_raw) if len(X_train_raw) > 0 else np.array([])
-X_test_pca = pca.transform(X_test_raw) if len(X_test_raw) > 0 else np.array([])
+X_train_pca = pca.fit_transform(X_train_raw) if len(X_train_raw) > 0 else np.array([]) [cite: 179]
+X_test_pca = pca.transform(X_test_raw) if len(X_test_raw) > 0 else np.array([]) [cite: 220]
 
 # Membuat Tab Tampilan UI/UX
 tab1, tab2, tab3 = st.tabs(["📊 Analisis Data Terbuka (EDA)", "📸 Pengujian Kemiripan Gambar", "📈 Evaluasi Akurasi Sistem"])
@@ -186,16 +195,16 @@ with tab1:
         if len(X_train_raw) > 0:
             df_info = pd.DataFrame({
                 "Deskripsi Metrik Data": [
-                    "Jumlah Gambar Data Latih ($m$)",
+                    "Jumlah Gambar Data Latih ($m$)", [cite: 52]
                     "Jumlah Gambar Data Uji", 
-                    "Dimensi Fitur Piksel Asli ($n$)",
-                    "Dimensi Fitur Tereduksi setelah PCA ($k$)"
+                    "Dimensi Fitur Piksel Asli ($n$)", [cite: 53]
+                    "Dimensi Fitur Tereduksi setelah PCA ($k$)" [cite: 73]
                 ],
                 "Nilai Ukuran": [int(X_train_raw.shape[0]), int(X_test_raw.shape[0]), int(X_train_raw.shape[1]), int(n_components)]
             })
             st.table(df_info)
         else:
-            st.warning("Data latih belum siap.")
+            st.warning("Data latih belum siap atau kosong.")
         
     with col2:
         st.subheader("Distribusi Jumlah Foto Per Identitas")
@@ -220,8 +229,8 @@ with tab2:
         with open("temp_a.jpg", "wb") as f: f.write(file1.read())
         with open("temp_b.jpg", "wb") as f: f.write(file2.read())
                 
-        feat_a = load_and_preprocess_image("temp_a.jpg").reshape(1, -1)
-        feat_b = load_and_preprocess_image("temp_b.jpg").reshape(1, -1)
+        feat_a = detect_and_crop_face("temp_a.jpg").reshape(1, -1)
+        feat_b = detect_and_crop_face("temp_b.jpg").reshape(1, -1)
         
         feat_a_pca = pca.transform(feat_a)[0]
         feat_b_pca = pca.transform(feat_b)[0]
@@ -235,12 +244,12 @@ with tab2:
         
         with res_col1:
             st.metric(label="Metode A: Jarak Euclidean", value=f"{dist_euclidean:.4f}")
-            status_euclidean = "🟢 MIRIP" if dist_euclidean < euclidean_threshold else "🔴 TIDAK MIRIP"
+            status_euclidean = "🟢 MIRIP" if dist_euclidean < euclidean_threshold else "🔴 TIDAK MIRIP" [cite: 121, 123]
             st.write(f"Keputusan Sistem (Threshold < {euclidean_threshold}): **{status_euclidean}**")
             
         with res_col2:
             st.metric(label="Metode B: Cosine Similarity", value=f"{sim_cosine:.4f}")
-            status_cosine = "🟢 MIRIP" if sim_cosine >= cosine_threshold else "🔴 TIDAK MIRIP"
+            status_cosine = "🟢 MIRIP" if sim_cosine >= cosine_threshold else "🔴 TIDAK MIRIP" [cite: 132, 133]
             st.write(f"Keputusan Sistem (Threshold ≥ {cosine_threshold}): **{status_cosine}**")
 
 # ------------------------------------------------------------------------------
@@ -260,7 +269,7 @@ with tab3:
             if acc_euclidean >= 50.0:
                 st.success("✅ Sukses: Akurasi di atas batas kelulusan target 50%!")
             else:
-                st.error("❌ Target Belum Tercapai: Silakan naikkan slider 'Threshold Jarak Euclidean' ke arah kanan (misal: 55-65).")
+                st.error("❌ Target Belum Tercapai: Silakan naikkan slider 'Threshold Jarak Euclidean' ke arah kanan (misal: 55-75).")
                 
         with c_acc2:
             st.subheader("Akurasi Menggunakan Metode Cosine Similarity")
@@ -268,6 +277,6 @@ with tab3:
             if acc_cosine >= 50.0:
                 st.success("✅ Sukses: Akurasi di atas batas kelulusan target 50%!")
             else:
-                st.error("❌ Target Belum Tercapai: Silakan turunkan slider 'Threshold Cosine Similarity' ke arah kiri (misal: 0.15-0.25).")
+                st.error("❌ Target Belum Tercapai: Silakan turunkan slider 'Threshold Cosine Similarity' ke arah kiri (misal: 0.10-0.25).")
     else:
         st.warning("Matriks data uji kosong, pastikan isi folder dataset sudah benar.")
