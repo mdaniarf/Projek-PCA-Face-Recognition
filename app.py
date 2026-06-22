@@ -2,9 +2,8 @@ import streamlit as st
 import cv2
 import numpy as np
 import os
-import re
-
 from PIL import Image
+
 from sklearn.decomposition import PCA
 from sklearn.model_selection import train_test_split
 from sklearn.neighbors import KNeighborsClassifier
@@ -16,49 +15,16 @@ from scipy.spatial.distance import euclidean
 # CONFIG
 # =====================================================
 
-st.set_page_config(page_title="Face Recognition PCA")
+st.set_page_config(
+    page_title="Age-Invariant Face Recognition",
+    layout="wide"
+)
 
-IMG_SIZE = (100, 100)
 DATASET_PATH = "dataset"
+IMG_SIZE = (128, 128)
 
 # =====================================================
-# AGE GROUP
-# =====================================================
-
-def age_group(age):
-
-    if age <= 12:
-        return "Child"
-
-    elif age <= 19:
-        return "Teen"
-
-    elif age <= 35:
-        return "Young Adult"
-
-    elif age <= 55:
-        return "Adult"
-
-    else:
-        return "Senior"
-
-
-# =====================================================
-# GET AGE
-# =====================================================
-
-def get_age(filename):
-
-    match = re.search(r"A(\d+)", filename)
-
-    if match:
-        return int(match.group(1))
-
-    return None
-
-
-# =====================================================
-# PREPROCESS
+# IMAGE PREPROCESSING
 # =====================================================
 
 def preprocess_image(path):
@@ -73,6 +39,8 @@ def preprocess_image(path):
         cv2.COLOR_BGR2GRAY
     )
 
+    gray = cv2.equalizeHist(gray)
+
     gray = cv2.resize(
         gray,
         IMG_SIZE
@@ -82,46 +50,37 @@ def preprocess_image(path):
 
     return gray.flatten()
 
-
 # =====================================================
 # LOAD DATASET
 # =====================================================
 
-def load_dataset(dataset_path):
+def load_dataset():
 
     X = []
     y = []
 
-    if not os.path.exists(dataset_path):
-        st.error(
-            f"Folder dataset tidak ditemukan: {dataset_path}"
-        )
+    if not os.path.exists(DATASET_PATH):
         return np.array([]), np.array([])
 
-    folders = os.listdir(dataset_path)
+    persons = sorted(
+        os.listdir(DATASET_PATH)
+    )
 
-    for person in folders:
+    for person in persons:
 
         folder_path = os.path.join(
-            dataset_path,
+            DATASET_PATH,
             person
         )
 
         if not os.path.isdir(folder_path):
             continue
 
-        files = os.listdir(folder_path)
-
-        for file in files:
+        for file in os.listdir(folder_path):
 
             if not file.lower().endswith(
                 (".jpg", ".jpeg", ".png")
             ):
-                continue
-
-            age = get_age(file)
-
-            if age is None:
                 continue
 
             image_path = os.path.join(
@@ -137,10 +96,11 @@ def load_dataset(dataset_path):
                 continue
 
             X.append(vector)
-            y.append(age_group(age))
+
+            # label = identitas orang
+            y.append(person)
 
     return np.array(X), np.array(y)
-
 
 # =====================================================
 # TRAIN MODEL
@@ -149,41 +109,22 @@ def load_dataset(dataset_path):
 @st.cache_resource
 def train_model():
 
-    X, y = load_dataset(DATASET_PATH)
+    X, y = load_dataset()
 
     if len(X) == 0:
         return None
 
-    unique, counts = np.unique(
+    X_train, X_test, y_train, y_test = train_test_split(
+        X,
         y,
-        return_counts=True
+        test_size=0.2,
+        random_state=42,
+        stratify=y
     )
 
-    min_class_count = counts.min()
-
-    if min_class_count < 2:
-
-        X_train, X_test, y_train, y_test = train_test_split(
-            X,
-            y,
-            test_size=0.2,
-            random_state=42
-        )
-
-    else:
-
-        X_train, X_test, y_train, y_test = train_test_split(
-            X,
-            y,
-            test_size=0.2,
-            random_state=42,
-            stratify=y
-        )
-
     n_components = min(
-        30,
-        X_train.shape[0] - 1,
-        X_train.shape[1]
+        80,
+        X_train.shape[0] - 1
     )
 
     pca = PCA(
@@ -199,7 +140,7 @@ def train_model():
     )
 
     knn = KNeighborsClassifier(
-        n_neighbors=3
+        n_neighbors=1
     )
 
     knn.fit(
@@ -207,51 +148,49 @@ def train_model():
         y_train
     )
 
-    pred = knn.predict(
+    prediction = knn.predict(
         X_test_pca
     )
 
     acc = accuracy_score(
         y_test,
-        pred
+        prediction
     )
 
     return (
         pca,
         knn,
-        acc
+        acc,
+        X,
+        y
     )
-
 
 # =====================================================
 # LOAD MODEL
 # =====================================================
 
-model_result = train_model()
+model = train_model()
 
-# =====================================================
-# UI
-# =====================================================
-
-st.title(
-    "Face Recognition Based On Age (PCA)"
-)
-
-if model_result is None:
+if model is None:
 
     st.error(
-        "Dataset gagal dibaca atau kosong."
+        "Dataset tidak ditemukan atau kosong"
     )
 
     st.stop()
 
-pca, knn, acc = model_result
+pca, knn, acc, X_all, y_all = model
 
-menu = st.sidebar.selectbox(
+# =====================================================
+# SIDEBAR
+# =====================================================
+
+menu = st.sidebar.radio(
     "Menu",
     [
         "Home",
-        "Prediksi Usia",
+        "EDA",
+        "Recognize Person",
         "Face Similarity"
     ]
 )
@@ -262,37 +201,66 @@ menu = st.sidebar.selectbox(
 
 if menu == "Home":
 
-    X, y = load_dataset(DATASET_PATH)
-
-    st.subheader("Informasi Dataset")
-
-    st.write(
-        "Total Gambar:",
-        len(X)
+    st.title(
+        "Age-Invariant Face Recognition Using PCA"
     )
 
+    st.markdown("---")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+
+        st.metric(
+            "Total Images",
+            len(X_all)
+        )
+
+    with col2:
+
+        st.metric(
+            "Accuracy",
+            f"{acc*100:.2f}%"
+        )
+
+# =====================================================
+# EDA
+# =====================================================
+
+elif menu == "EDA":
+
+    st.title("Exploratory Data Analysis")
+
     unique, counts = np.unique(
-        y,
+        y_all,
         return_counts=True
     )
 
-    for u, c in zip(unique, counts):
-        st.write(f"{u}: {c}")
-
-    st.subheader("Akurasi")
-
-    st.success(
-        f"{acc*100:.2f}%"
+    st.subheader(
+        "Jumlah Foto per Individu"
     )
 
+    for person, count in zip(
+        unique,
+        counts
+    ):
+
+        st.write(
+            f"Individu {person} : {count} foto"
+        )
+
 # =====================================================
-# PREDIKSI USIA
+# RECOGNIZE PERSON
 # =====================================================
 
-elif menu == "Prediksi Usia":
+elif menu == "Recognize Person":
+
+    st.title(
+        "Recognize Person"
+    )
 
     uploaded = st.file_uploader(
-        "Upload Foto",
+        "Upload Image",
         type=["jpg", "jpeg", "png"]
     )
 
@@ -302,7 +270,7 @@ elif menu == "Prediksi Usia":
 
         st.image(
             image,
-            width=250
+            width=300
         )
 
         img = np.array(image)
@@ -310,6 +278,10 @@ elif menu == "Prediksi Usia":
         gray = cv2.cvtColor(
             img,
             cv2.COLOR_RGB2GRAY
+        )
+
+        gray = cv2.equalizeHist(
+            gray
         )
 
         gray = cv2.resize(
@@ -321,21 +293,30 @@ elif menu == "Prediksi Usia":
 
         vector = gray.flatten()
 
-        vector = vector.reshape(
-            1,
-            -1
-        )
-
         vector_pca = pca.transform(
-            vector
+            vector.reshape(1, -1)
         )
 
         prediction = knn.predict(
             vector_pca
         )[0]
 
+        distance, _ = knn.kneighbors(
+            vector_pca,
+            n_neighbors=1
+        )
+
+        confidence = max(
+            0,
+            100 - distance[0][0] * 10
+        )
+
         st.success(
-            f"Prediksi: {prediction}"
+            f"Identitas Terdeteksi : {prediction}"
+        )
+
+        st.info(
+            f"Confidence : {confidence:.2f}%"
         )
 
 # =====================================================
@@ -344,17 +325,27 @@ elif menu == "Prediksi Usia":
 
 elif menu == "Face Similarity":
 
-    file1 = st.file_uploader(
-        "Upload Foto Pertama",
-        type=["jpg", "jpeg", "png"],
-        key="1"
+    st.title(
+        "Face Similarity"
     )
 
-    file2 = st.file_uploader(
-        "Upload Foto Kedua",
-        type=["jpg", "jpeg", "png"],
-        key="2"
-    )
+    col1, col2 = st.columns(2)
+
+    with col1:
+
+        file1 = st.file_uploader(
+            "Foto Pertama",
+            type=["jpg", "jpeg", "png"],
+            key="file1"
+        )
+
+    with col2:
+
+        file2 = st.file_uploader(
+            "Foto Kedua",
+            type=["jpg", "jpeg", "png"],
+            key="file2"
+        )
 
     if file1 and file2:
 
@@ -374,6 +365,14 @@ elif menu == "Face Similarity":
         gray2 = cv2.cvtColor(
             img2,
             cv2.COLOR_RGB2GRAY
+        )
+
+        gray1 = cv2.equalizeHist(
+            gray1
+        )
+
+        gray2 = cv2.equalizeHist(
+            gray2
         )
 
         gray1 = cv2.resize(
@@ -407,15 +406,24 @@ elif menu == "Face Similarity":
             vec2_pca[0]
         )
 
-        st.write(
-            f"Cosine Similarity: {cosine:.4f}"
+        st.metric(
+            "Cosine Similarity",
+            f"{cosine:.4f}"
         )
 
-        st.write(
-            f"Euclidean Distance: {distance:.4f}"
+        st.metric(
+            "Euclidean Distance",
+            f"{distance:.4f}"
         )
 
-        if cosine > 0.8:
-            st.success("Mirip")
+        if cosine > 0.80:
+
+            st.success(
+                "Kedua wajah kemungkinan orang yang sama"
+            )
+
         else:
-            st.error("Tidak Mirip")
+
+            st.error(
+                "Kedua wajah kemungkinan berbeda"
+            )
