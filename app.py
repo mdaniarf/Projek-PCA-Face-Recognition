@@ -2,8 +2,9 @@ import streamlit as st
 import cv2
 import numpy as np
 import os
-from PIL import Image
+import re
 
+from PIL import Image
 from sklearn.decomposition import PCA
 from sklearn.model_selection import train_test_split
 from sklearn.neighbors import KNeighborsClassifier
@@ -16,15 +17,32 @@ from scipy.spatial.distance import euclidean
 # =====================================================
 
 st.set_page_config(
-    page_title="Age-Invariant Face Recognition",
+    page_title="Age Invariant Face Recognition",
     layout="wide"
 )
 
 DATASET_PATH = "dataset"
-IMG_SIZE = (128, 128)
+
+IMG_SIZE = (64, 64)
+
+MIN_AGE = 6
+MAX_AGE = 100
 
 # =====================================================
-# IMAGE PREPROCESSING
+# GET AGE
+# =====================================================
+
+def get_age(filename):
+
+    match = re.search(r"A(\d+)", filename)
+
+    if match:
+        return int(match.group(1))
+
+    return None
+
+# =====================================================
+# PREPROCESS
 # =====================================================
 
 def preprocess_image(path):
@@ -46,7 +64,7 @@ def preprocess_image(path):
         IMG_SIZE
     )
 
-    gray = gray / 255.0
+    gray = gray.astype(np.float32) / 255.0
 
     return gray.flatten()
 
@@ -76,11 +94,24 @@ def load_dataset():
         if not os.path.isdir(folder_path):
             continue
 
-        for file in os.listdir(folder_path):
+        files = os.listdir(folder_path)
+
+        for file in files:
 
             if not file.lower().endswith(
                 (".jpg", ".jpeg", ".png")
             ):
+                continue
+
+            age = get_age(file)
+
+            if age is None:
+                continue
+
+            if age < MIN_AGE:
+                continue
+
+            if age > MAX_AGE:
                 continue
 
             image_path = os.path.join(
@@ -97,7 +128,7 @@ def load_dataset():
 
             X.append(vector)
 
-            # label = identitas orang
+            # LABEL = IDENTITAS ORANG
             y.append(person)
 
     return np.array(X), np.array(y)
@@ -114,21 +145,41 @@ def train_model():
     if len(X) == 0:
         return None
 
-    X_train, X_test, y_train, y_test = train_test_split(
-        X,
+    unique, counts = np.unique(
         y,
-        test_size=0.2,
-        random_state=42,
-        stratify=y
+        return_counts=True
     )
 
+    min_count = counts.min()
+
+    if min_count >= 2:
+
+        X_train, X_test, y_train, y_test = train_test_split(
+            X,
+            y,
+            test_size=0.2,
+            random_state=42,
+            stratify=y
+        )
+
+    else:
+
+        X_train, X_test, y_train, y_test = train_test_split(
+            X,
+            y,
+            test_size=0.2,
+            random_state=42
+        )
+
     n_components = min(
-        80,
-        X_train.shape[0] - 1
+        40,
+        X_train.shape[0] - 1,
+        X_train.shape[1]
     )
 
     pca = PCA(
-        n_components=n_components
+        n_components=n_components,
+        whiten=True
     )
 
     X_train_pca = pca.fit_transform(
@@ -140,7 +191,8 @@ def train_model():
     )
 
     knn = KNeighborsClassifier(
-        n_neighbors=1
+        n_neighbors=3,
+        weights="distance"
     )
 
     knn.fit(
@@ -148,13 +200,13 @@ def train_model():
         y_train
     )
 
-    prediction = knn.predict(
+    pred = knn.predict(
         X_test_pca
     )
 
     acc = accuracy_score(
         y_test,
-        prediction
+        pred
     )
 
     return (
@@ -174,7 +226,7 @@ model = train_model()
 if model is None:
 
     st.error(
-        "Dataset tidak ditemukan atau kosong"
+        "Dataset tidak ditemukan atau kosong."
     )
 
     st.stop()
@@ -202,7 +254,7 @@ menu = st.sidebar.radio(
 if menu == "Home":
 
     st.title(
-        "Age-Invariant Face Recognition Using PCA"
+        "Age Invariant Face Recognition Using PCA"
     )
 
     st.markdown("---")
@@ -229,7 +281,9 @@ if menu == "Home":
 
 elif menu == "EDA":
 
-    st.title("Exploratory Data Analysis")
+    st.title(
+        "Exploratory Data Analysis"
+    )
 
     unique, counts = np.unique(
         y_all,
@@ -246,7 +300,7 @@ elif menu == "EDA":
     ):
 
         st.write(
-            f"Individu {person} : {count} foto"
+            f"{person} : {count} foto"
         )
 
 # =====================================================
@@ -260,20 +314,28 @@ elif menu == "Recognize Person":
     )
 
     uploaded = st.file_uploader(
-        "Upload Image",
-        type=["jpg", "jpeg", "png"]
+        "Upload Wajah",
+        type=[
+            "jpg",
+            "jpeg",
+            "png"
+        ]
     )
 
     if uploaded:
 
-        image = Image.open(uploaded)
+        image = Image.open(
+            uploaded
+        )
 
         st.image(
             image,
             width=300
         )
 
-        img = np.array(image)
+        img = np.array(
+            image
+        )
 
         gray = cv2.cvtColor(
             img,
@@ -289,7 +351,9 @@ elif menu == "Recognize Person":
             IMG_SIZE
         )
 
-        gray = gray / 255.0
+        gray = gray.astype(
+            np.float32
+        ) / 255.0
 
         vector = gray.flatten()
 
@@ -312,7 +376,7 @@ elif menu == "Recognize Person":
         )
 
         st.success(
-            f"Identitas Terdeteksi : {prediction}"
+            f"Identitas : {prediction}"
         )
 
         st.info(
@@ -335,16 +399,24 @@ elif menu == "Face Similarity":
 
         file1 = st.file_uploader(
             "Foto Pertama",
-            type=["jpg", "jpeg", "png"],
-            key="file1"
+            type=[
+                "jpg",
+                "jpeg",
+                "png"
+            ],
+            key="img1"
         )
 
     with col2:
 
         file2 = st.file_uploader(
             "Foto Kedua",
-            type=["jpg", "jpeg", "png"],
-            key="file2"
+            type=[
+                "jpg",
+                "jpeg",
+                "png"
+            ],
+            key="img2"
         )
 
     if file1 and file2:
@@ -416,14 +488,15 @@ elif menu == "Face Similarity":
             f"{distance:.4f}"
         )
 
-        if cosine > 0.80:
+        if cosine >= 0.80:
 
             st.success(
-                "Kedua wajah kemungkinan orang yang sama"
+                "Kemungkinan orang yang sama"
             )
 
         else:
 
             st.error(
-                "Kedua wajah kemungkinan berbeda"
+                "Kemungkinan orang berbeda"
             )
+
