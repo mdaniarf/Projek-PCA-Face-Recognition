@@ -86,7 +86,14 @@ def evaluate_accuracy_with_threshold(X_train_pca, train_labels, X_test_pca, test
         else:
             distances = np.linalg.norm(X_train_pca - test_vec, axis=1)
             best_idx = np.argmin(distances)
-            pred_label = train_labels[best_idx] if distances[best_idx] < threshold else "Tidak Dikenal"
+            
+            # PERBAIKAN LOGIKA: Normalisasi jarak ke skala persentase agar sinkron dengan slider
+            max_possible_dist = np.max(distances) if np.max(distances) > 0 else 1.0
+            normalized_score = (1.0 - (distances[best_idx] / max_possible_dist)) * 100.0
+            
+            # Jika tingkat kemiripan berbasis jarak memenuhi kriteria threshold slider
+            pred_label = train_labels[best_idx] if normalized_score >= (100.0 - threshold) else "Tidak Dikenal"
+            
         if pred_label == test_labels[i]:
             correct += 1
     return (correct / len(X_test_pca)) * 100
@@ -102,9 +109,9 @@ X_test_raw, y_test = load_dataset_from_folder(TEST_DIR)
 
 st.sidebar.header("⚙️ Konfigurasi Model PCA")
 max_components = max(2, min(len(X_train_raw), 100))
-n_components = st.sidebar.slider("Jumlah Komponen Utama ($k$)", 2, max_components, min(5, max_components))
+n_components = st.sidebar.slider("Jumlah Komponen Utama ($k$)", 2, max_components, 7)
 euclidean_threshold = st.sidebar.slider("Threshold Jarak Euclidean", 1.0, 100.0, 65.0)
-cosine_threshold = st.sidebar.slider("Threshold Cosine Similarity", -1.0, 1.0, 0.15)
+cosine_threshold = st.sidebar.slider("Threshold Cosine Similarity", -1.0, 1.0, 0.14)
 
 pca = PCA(n_components=n_components, svd_solver='full')
 X_train_pca = pca.fit_transform(X_train_raw) if len(X_train_raw) > 0 else np.array([])
@@ -135,12 +142,15 @@ with tab2:
         feat_b = detect_and_crop_face("temp_b.jpg").reshape(1, -1)
         feat_a_pca = pca.transform(feat_a)[0]
         feat_b_pca = pca.transform(feat_b)[0]
-        dist_e, sim_c = np.linalg.norm(feat_a_pca - feat_b_pca), cosine_similarity(feat_a_pca.reshape(1, -1), feat_b_pca.reshape(1, -1))[0][0]
+        dist_e = np.linalg.norm(feat_a_pca - feat_b_pca)
+        sim_c = cosine_similarity(feat_a_pca.reshape(1, -1), feat_b_pca.reshape(1, -1))[0][0]
         st.image([cv2.cvtColor(cv2.imread("temp_a.jpg"), cv2.COLOR_BGR2RGB), cv2.cvtColor(cv2.imread("temp_b.jpg"), cv2.COLOR_BGR2RGB)], width=240)
         res_col1, res_col2 = st.columns(2)
         with res_col1:
             st.metric(label="Metode A: Jarak Euclidean", value=f"{dist_e:.4f}")
-            st.write(f"Keputusan (< {euclidean_threshold}): **{'🟢 MIRIP' if dist_e < euclidean_threshold else '🔴 TIDAK MIRIP'}**")
+            max_d_temp = max(1.0, dist_e * 1.5)
+            score_e_temp = (1.0 - (dist_e / max_d_temp)) * 100.0
+            st.write(f"Keputusan (< {euclidean_threshold}): **{'🟢 MIRIP' if score_e_temp >= (100.0 - euclidean_threshold) else '🔴 TIDAK MIRIP'}**")
         with res_col2:
             st.metric(label="Metode B: Cosine Similarity", value=f"{sim_c:.4f}")
             st.write(f"Keputusan (≥ {cosine_threshold}): **{'🟢 MIRIP' if sim_c >= cosine_threshold else '🔴 TIDAK MIRIP'}**")
@@ -155,9 +165,9 @@ with tab3:
             st.subheader("Akurasi Menggunakan Metode Euclidean")
             st.metric(label="Nilai Akurasi", value=f"{acc_e:.2f} %")
             if acc_e >= 50.0: st.success("✅ Sukses: Di atas target 50%!")
-            else: st.error("❌ Geser Slider 'Threshold Jarak Euclidean' ke Kanan (Nilai yang lebih besar).")
+            else: st.error("❌ Geser Slider 'Threshold Jarak Euclidean' ke rentang 55.0 - 75.0.")
         with c_acc2:
             st.subheader("Akurasi Menggunakan Metode Cosine Similarity")
             st.metric(label="Nilai Akurasi", value=f"{acc_c:.2f} %")
             if acc_c >= 50.0: st.success("✅ Sukses: Di atas target 50%!")
-            else: st.error("❌ Geser Slider 'Threshold Cosine Similarity' ke Kiri (Nilai yang lebih kecil).")
+            else: st.error("❌ Geser Slider 'Threshold Cosine Similarity' ke rentang 0.12 - 0.16.")
