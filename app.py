@@ -150,8 +150,8 @@ st.write("Aplikasi GUI interaktif untuk mereduksi dimensi data wajah menjadi rua
 # Sidebar - Konfigurasi Parameter Interaktif
 st.sidebar.header("⚙️ Konfigurasi Model PCA")
 n_components = st.sidebar.slider("Jumlah Komponen Utama ($k$)", 5, 100, 50)  # Default 50 sesuai dokumen
-euclidean_threshold = st.sidebar.slider("Threshold Jarak Euclidean (Uji Tunggal)", 1.0, 50.0, 35.0)  # Dioptimalkan agar lebih longgar
-cosine_threshold = st.sidebar.slider("Threshold Cosine Similarity (Uji Tunggal)", 0.0, 1.0, 0.50)      # Dioptimalkan ke 0.50
+euclidean_threshold = st.sidebar.slider("Threshold Jarak Euclidean (Uji Tunggal)", 1.0, 50.0, 35.0)  
+cosine_threshold = st.sidebar.slider("Threshold Cosine Similarity (Uji Tunggal)", 0.0, 1.0, 0.50)      
 
 # Cek keberadaan dataset awal
 dataset_ready = False
@@ -198,7 +198,7 @@ pca = PCA(n_components=n_components, svd_solver='full')
 X_train_pca = pca.fit_transform(X_train)
 X_test_pca = pca.transform(X_test)
 
-# Membuat Tab Tampilan UI/UX sesuai instruksi nomor 7
+# Membuat Tab Tampilan UI/UX
 tab1, tab2, tab3 = st.tabs(["📊 Analisis Data Terbuka (EDA)", "📸 Pengujian Kemiripan Gambar", "📈 Evaluasi Akurasi Sistem"])
 
 # ------------------------------------------------------------------------------
@@ -217,4 +217,27 @@ with tab1:
                 "Dimensi Fitur Piksel Asli ($n$)", 
                 "Dimensi Fitur Tereduksi setelah PCA ($k$)"
             ],
-            "Nilai Ukuran": [X_train.shape[0], X_test.shape[0], X_
+            "Nilai Ukuran": [int(X_train.shape[0]), int(X_test.shape[0]), int(X_train.shape[1]), int(n_components)]
+        })
+        st.table(df_info)
+        st.info(f"💡 **Langkah 3 PPT Terpenuhi:** Ukuran awal matriks data $X$ adalah **{X_train.shape[0]} × {X_train.shape[1]}**.")
+        
+    with col2:
+        st.subheader("Distribusi Jumlah Foto Per Identitas Folder (Data Latih)")
+        unique_labels, counts = np.unique(y_train, return_counts=True)
+        chart_data = pd.DataFrame({"Jumlah Sampel Foto": counts}, index=unique_labels)
+        st.bar_chart(chart_data)
+
+    st.write("---")
+    st.subheader("Visualisasi Pola Matriks SVD (Wajah Rata-rata & Eigenfaces)")
+    st.write("Sesuai konsep Eigenfaces (Langkah 4 & 5 PPT), gambar di bawah merupakan hasil proyeksi arah variasi terbesar.")
+    
+    # Mengambil mean face (Langkah 4 PPT: Centering Data)
+    mean_face = pca.mean_.reshape(100, 100)
+    
+    col_m, col_e = st.columns([1, 4])
+    with col_m:
+        st.image(mean_face, caption="Mean Face (Rata-rata)", use_container_width=True, clamp=True, channels="GRAY")
+        
+    with col_e:
+        fig, axes = plt.subplots(
