@@ -147,7 +147,6 @@ with tab2:
             else: st.error("Geser Slider 'Threshold Cosine Similarity' ke rentang 0.12 - 0.16.")
                 
 with tab3:
-    with tab3:
     st.header("Deteksi Kemiripan Antara Dua Citra")
     
     img_path_a = os.path.join(TARGET_IMAGE_DIR, "kecil.jpg")
