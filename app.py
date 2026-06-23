@@ -145,7 +145,7 @@ with tab2:
             st.subheader("Akurasi Menggunakan Metode Cosine Similarity")
             st.metric(label="Nilai Akurasi", value=f"{acc_c:.2f} %")
             if acc_c >= 50.0: st.success("Sukses: Di atas target 50%!")
-            else: st.error("❌ Geser Slider 'Threshold Cosine Similarity' ke rentang 0.12 - 0.16.")
+            else: st.error("Geser Slider 'Threshold Cosine Similarity' ke rentang 0.12 - 0.16.")
                 
 with tab3:
     st.header("Deteksi Kemiripan Antara Dua Foto")
