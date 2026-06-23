@@ -101,8 +101,7 @@ def evaluate_accuracy_robust(X_train_pca, train_labels, X_test_pca, test_labels,
 st.title("Sistem Deteksi Kemiripan Wajah Berbasis PCA/SVD")
 st.write("Aplikasi GUI interaktif reduksi dimensi citra wajah menjadi ruang Eigenfaces.")
 
-if not os.path.exists(TRAIN_DIR) or len(os.listdir(TRAIN_DIR)) == 0:
-    split_faces_dataset(RAW_DIR, TRAIN_DIR, TEST_DIR)
+split_faces_dataset(RAW_DIR, TRAIN_DIR, TEST_DIR)
 
 X_train_raw, y_train = load_dataset_from_folder(TRAIN_DIR)
 X_test_raw, y_test = load_dataset_from_folder(TEST_DIR)
