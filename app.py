@@ -32,8 +32,7 @@ def detect_and_crop_face(image_path):
     return (face_resized / 255.0).flatten()
 
 def split_faces_dataset(source_dir, train_dir, test_dir, split_ratio=0.8):
-    if not os.path.exists(source_dir):
-        return False
+    if not os.path.exists(source_dir): return False
     if os.path.exists(train_dir): shutil.rmtree(train_dir)
     if os.path.exists(test_dir): shutil.rmtree(test_dir)
     os.makedirs(train_dir, exist_ok=True)
