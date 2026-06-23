@@ -79,11 +79,9 @@ def evaluate_accuracy_robust(X_train_pca, train_labels, X_test_pca, test_labels,
         return 0.0
     correct = 0
     for i, test_vec in enumerate(X_test_pca):
-        # 1. Hitung berbasis Cosine
         similarities = cosine_similarity(test_vec.reshape(1, -1), X_train_pca)[0]
         best_cosine_idx = np.argmax(similarities)
         pred_cosine = train_labels[best_cosine_idx]
-        
         # 2. Hitung berbasis Euclidean
         distances = np.linalg.norm(X_train_pca - test_vec, axis=1)
         best_euclidean_idx = np.argmin(distances)
