@@ -139,7 +139,7 @@ with tab2:
         with c_acc1:
             st.subheader("Akurasi Menggunakan Metode Euclidean")
             st.metric(label="Nilai Akurasi", value=f"{acc_e:.2f} %")
-            if acc_e >= 50.0: st.success("✅ Sukses: Di atas target 50%!")
+            if acc_e >= 50.0: st.success("Sukses: Di atas target 50%!")
             else: st.error("❌ Atur Slider Komponen Utama ke angka 3 atau 4.")
         with c_acc2:
             st.subheader("Akurasi Menggunakan Metode Cosine Similarity")
