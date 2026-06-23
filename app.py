@@ -135,6 +135,23 @@ with tab1:
         st.bar_chart(pd.DataFrame({"Jumlah Sampel Foto": counts}, index=unique_labels))
 
 with tab2:
+    st.header("Evaluasi Akurasi Seluruh Dataset Uji (Proporsi 20%)")
+    if len(X_test_pca) > 0:
+        acc_e = evaluate_accuracy_robust(X_train_pca, y_train, X_test_pca, y_test, method='euclidean', threshold=cosine_threshold)
+        acc_c = evaluate_accuracy_robust(X_train_pca, y_train, X_test_pca, y_test, method='cosine', threshold=cosine_threshold)
+        c_acc1, c_acc2 = st.columns(2)
+        with c_acc1:
+            st.subheader("Akurasi Menggunakan Metode Euclidean")
+            st.metric(label="Nilai Akurasi", value=f"{acc_e:.2f} %")
+            if acc_e >= 50.0: st.success("✅ Sukses: Di atas target 50%!")
+            else: st.error("❌ Atur Slider Komponen Utama ke angka 3 atau 4.")
+        with c_acc2:
+            st.subheader("Akurasi Menggunakan Metode Cosine Similarity")
+            st.metric(label="Nilai Akurasi", value=f"{acc_c:.2f} %")
+            if acc_c >= 50.0: st.success("✅ Sukses: Di atas target 50%!")
+            else: st.error("❌ Geser Slider 'Threshold Cosine Similarity' ke rentang 0.12 - 0.16.")
+                
+with tab3:
     st.header("Deteksi Kemiripan Antara Dua Foto")
     c1, c2 = st.columns(2)
     with c1: file1 = st.file_uploader("Unggah Gambar Wajah Pertama (A)", type=["jpg", "png", "jpeg"], key="upload_1")
@@ -156,20 +173,3 @@ with tab2:
         with res_col2:
             st.metric(label="Metode B: Cosine Similarity", value=f"{sim_c:.4f}")
             st.write(f"Keputusan (≥ {cosine_threshold}): **{'🟢 MIRIP' if sim_c >= cosine_threshold else '🔴 TIDAK MIRIP'}**")
-
-with tab3:
-    st.header("Evaluasi Akurasi Seluruh Dataset Uji (Proporsi 20%)")
-    if len(X_test_pca) > 0:
-        acc_e = evaluate_accuracy_robust(X_train_pca, y_train, X_test_pca, y_test, method='euclidean', threshold=cosine_threshold)
-        acc_c = evaluate_accuracy_robust(X_train_pca, y_train, X_test_pca, y_test, method='cosine', threshold=cosine_threshold)
-        c_acc1, c_acc2 = st.columns(2)
-        with c_acc1:
-            st.subheader("Akurasi Menggunakan Metode Euclidean")
-            st.metric(label="Nilai Akurasi", value=f"{acc_e:.2f} %")
-            if acc_e >= 50.0: st.success("✅ Sukses: Di atas target 50%!")
-            else: st.error("❌ Atur Slider Komponen Utama ke angka 3 atau 4.")
-        with c_acc2:
-            st.subheader("Akurasi Menggunakan Metode Cosine Similarity")
-            st.metric(label="Nilai Akurasi", value=f"{acc_c:.2f} %")
-            if acc_c >= 50.0: st.success("✅ Sukses: Di atas target 50%!")
-            else: st.error("❌ Geser Slider 'Threshold Cosine Similarity' ke rentang 0.12 - 0.16.")
