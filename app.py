@@ -165,7 +165,7 @@ with tab3:
         res_col1, res_col2 = st.columns(2)
         with res_col1:
             st.metric(label="Metode A: Jarak Euclidean", value=f"{dist_e:.4f}")
-            st.write("Keputusan: **🟢 PROSES EVALUASI**")
+            st.write("Keputusan: **PROSES EVALUASI**")
         with res_col2:
             st.metric(label="Metode B: Cosine Similarity", value=f"{sim_c:.4f}")
             st.write(f"Keputusan (≥ {cosine_threshold}): **{'🟢 MIRIP' if sim_c >= cosine_threshold else '🔴 TIDAK MIRIP'}**")
