@@ -168,4 +168,4 @@ with tab3:
             st.write("Keputusan: **PROSES EVALUASI**")
         with res_col2:
             st.metric(label="Metode B: Cosine Similarity", value=f"{sim_c:.4f}")
-            st.write(f"Keputusan (≥ {cosine_threshold}): **{'🟢 MIRIP' if sim_c >= cosine_threshold else '🔴 TIDAK MIRIP'}**")
+            st.write(f"Keputusan (≥ {cosine_threshold}): **{'MIRIP' if sim_c >= cosine_threshold else 'TIDAK MIRIP'}**")
