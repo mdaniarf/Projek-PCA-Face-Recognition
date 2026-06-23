@@ -14,6 +14,7 @@ IMG_SIZE = (100, 100)
 RAW_DIR = "dataset"
 TRAIN_DIR = "data/train"
 TEST_DIR = "data/test"
+TARGET_IMAGE_DIR = "Image"
 
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
 
