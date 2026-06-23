@@ -29,7 +29,7 @@ def detect_and_crop_face(image_path):
     else:
         face_crop = gray
         face_resized = cv2.resize(face_crop, IMG_SIZE)
-        return (face_resized / 255.0).flatten()
+    return (face_resized / 255.0).flatten()
 
 def split_faces_dataset(source_dir, train_dir, test_dir, split_ratio=0.8):
     if not os.path.exists(source_dir): return False
@@ -40,8 +40,7 @@ def split_faces_dataset(source_dir, train_dir, test_dir, split_ratio=0.8):
     
     for person_folder in os.listdir(source_dir):
         person_path = os.path.join(source_dir, person_folder)
-        if not os.path.isdir(person_path):
-            continue
+        if not os.path.isdir(person_path): continue
         os.makedirs(os.path.join(train_dir, person_folder), exist_ok=True)
         os.makedirs(os.path.join(test_dir, person_folder), exist_ok=True)
         images = [f for f in os.listdir(person_path) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
