@@ -82,11 +82,10 @@ def evaluate_accuracy_robust(X_train_pca, train_labels, X_test_pca, test_labels,
         similarities = cosine_similarity(test_vec.reshape(1, -1), X_train_pca)[0]
         best_cosine_idx = np.argmax(similarities)
         pred_cosine = train_labels[best_cosine_idx]
-        # 2. Hitung berbasis Euclidean
+        
         distances = np.linalg.norm(X_train_pca - test_vec, axis=1)
         best_euclidean_idx = np.argmin(distances)
         pred_euclidean = train_labels[best_euclidean_idx]
-        
         # Penentuan keputusan akhir yang stabil untuk pengerjaan dataset kecil
         if method == 'cosine':
             pred_label = pred_cosine if similarities[best_cosine_idx] >= threshold else pred_euclidean
