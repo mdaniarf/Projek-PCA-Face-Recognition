@@ -167,17 +167,21 @@ with tab3:
             dist_e = np.linalg.norm(feat_a_pca - feat_b_pca)
             sim_c = cosine_similarity(feat_a_pca.reshape(1, -1), feat_b_pca.reshape(1, -1))[0][0]
             
+            similarity_percentage = ((sim_c + 1) / 2) * 100
+            
+            threshold_percentage = ((cosine_threshold + 1) / 2) * 100
+            
             img_a_display = cv2.cvtColor(cv2.imread(img_path_a), cv2.COLOR_BGR2RGB)
             img_b_display = cv2.cvtColor(cv2.imread(img_path_b), cv2.COLOR_BGR2RGB)
-            st.image([img_a_display, img_b_display], caption=["Foto Masa Kecil (kecil.jpg)", "Foto Masa Dewasa (dewasa.jpg)"], width=240)
+            st.image([img_a_display, img_b_display], caption=["Foto Masa Kecil", "Foto Masa Dewasa"], width=240)
             
             res_col1, res_col2 = st.columns(2)
             with res_col1:
                 st.metric(label="Metode A: Jarak Euclidean", value=f"{dist_e:.4f}")
                 st.write("Keputusan: **PROSES EVALUASI**")
             with res_col2:
-                st.metric(label="Metode B: Cosine Similarity", value=f"{sim_c:.4f}")
-                st.write(f"Keputusan (≥ {cosine_threshold}): **{'MIRIP' if sim_c >= cosine_threshold else 'TIDAK MIRIP'}**")
+                st.metric(label="Metode B: Tingkat Kemiripan (Cosine)", value=f"{similarity_percentage:.2f} %")
+                st.write(f"Keputusan (≥ {threshold_percentage:.2f}%): **{'MIRIP' if similarity_percentage >= threshold_percentage else 'TIDAK MIRIP'}**")
                 
         except Exception as e:
-            st.error(f"Gagal memproses gambar: {e}. Pastikan kedua citra memuat objek wajah yang terdeteksi.")
+            st.error(f"Gagal memproses gambar: {e}.")
