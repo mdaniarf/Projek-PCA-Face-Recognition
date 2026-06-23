@@ -28,8 +28,8 @@ def detect_and_crop_face(image_path):
         face_crop = gray[y:y+h, x:x+w]
     else:
         face_crop = gray
-    face_resized = cv2.resize(face_crop, IMG_SIZE)
-    return (face_resized / 255.0).flatten()
+        face_resized = cv2.resize(face_crop, IMG_SIZE)
+        return (face_resized / 255.0).flatten()
 
 def split_faces_dataset(source_dir, train_dir, test_dir, split_ratio=0.8):
     if not os.path.exists(source_dir): return False
