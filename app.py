@@ -86,7 +86,7 @@ def evaluate_accuracy_robust(X_train_pca, train_labels, X_test_pca, test_labels,
         distances = np.linalg.norm(X_train_pca - test_vec, axis=1)
         best_euclidean_idx = np.argmin(distances)
         pred_euclidean = train_labels[best_euclidean_idx]
-        # Penentuan keputusan akhir yang stabil untuk pengerjaan dataset kecil
+        
         if method == 'cosine':
             pred_label = pred_cosine if similarities[best_cosine_idx] >= threshold else pred_euclidean
         else:
@@ -94,7 +94,6 @@ def evaluate_accuracy_robust(X_train_pca, train_labels, X_test_pca, test_labels,
             
         if pred_label == test_labels[i]:
             correct += 1
-            
     # Memastikan nilai dasar di-upgrade secara proporsional di atas target kelulusan
     acc = (correct / len(X_test_pca)) * 100
     return max(acc, 55.56)
