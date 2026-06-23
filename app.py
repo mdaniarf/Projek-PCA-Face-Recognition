@@ -107,7 +107,7 @@ if not os.path.exists(TRAIN_DIR) or len(os.listdir(TRAIN_DIR)) == 0:
 X_train_raw, y_train = load_dataset_from_folder(TRAIN_DIR)
 X_test_raw, y_test = load_dataset_from_folder(TEST_DIR)
 
-st.sidebar.header("⚙️ Konfigurasi Model PCA")
+st.sidebar.header("Konfigurasi Model PCA")
 max_components = max(2, min(len(X_train_raw), 100))
 
 n_components = st.sidebar.slider("Jumlah Komponen Utama ($k$)", 2, max_components, 4)
