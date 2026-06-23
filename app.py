@@ -117,7 +117,7 @@ pca = PCA(n_components=n_components, svd_solver='full')
 X_train_pca = pca.fit_transform(X_train_raw) if len(X_train_raw) > 0 else np.array([])
 X_test_pca = pca.transform(X_test_raw) if len(X_test_raw) > 0 else np.array([])
 
-tab1, tab2, tab3 = st.tabs(["📊 Analisis Data Terbuka (EDA)", "📈 Evaluasi Akurasi Sistem", "📸 Pengujian Kemiripan Gambar"])
+tab1, tab2, tab3 = st.tabs(["Analisis Data Terbuka (EDA)", "Evaluasi Akurasi Sistem", "Pengujian Kemiripan Gambar"])
 
 with tab1:
     st.header("Exploratory Data Analysis (EDA)")
