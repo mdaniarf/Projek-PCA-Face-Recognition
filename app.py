@@ -147,24 +147,37 @@ with tab2:
             else: st.error("Geser Slider 'Threshold Cosine Similarity' ke rentang 0.12 - 0.16.")
                 
 with tab3:
-    st.header("Deteksi Kemiripan Antara Dua Foto")
-    c1, c2 = st.columns(2)
-    with c1: file1 = st.file_uploader("Unggah Gambar Wajah Pertama (A)", type=["jpg", "png", "jpeg"], key="upload_1")
-    with c2: file2 = st.file_uploader("Unggah Gambar Wajah Kedua (B)", type=["jpg", "png", "jpeg"], key="upload_2")
-    if file1 and file2:
-        with open("temp_a.jpg", "wb") as f: f.write(file1.read())
-        with open("temp_b.jpg", "wb") as f: f.write(file2.read())
-        feat_a = detect_and_crop_face("temp_a.jpg").reshape(1, -1)
-        feat_b = detect_and_crop_face("temp_b.jpg").reshape(1, -1)
-        feat_a_pca = pca.transform(feat_a)[0]
-        feat_b_pca = pca.transform(feat_b)[0]
-        dist_e = np.linalg.norm(feat_a_pca - feat_b_pca)
-        sim_c = cosine_similarity(feat_a_pca.reshape(1, -1), feat_b_pca.reshape(1, -1))[0][0]
-        st.image([cv2.cvtColor(cv2.imread("temp_a.jpg"), cv2.COLOR_BGR2RGB), cv2.cvtColor(cv2.imread("temp_b.jpg"), cv2.COLOR_BGR2RGB)], width=240)
-        res_col1, res_col2 = st.columns(2)
-        with res_col1:
-            st.metric(label="Metode A: Jarak Euclidean", value=f"{dist_e:.4f}")
-            st.write("Keputusan: **PROSES EVALUASI**")
-        with res_col2:
-            st.metric(label="Metode B: Cosine Similarity", value=f"{sim_c:.4f}")
-            st.write(f"Keputusan (≥ {cosine_threshold}): **{'MIRIP' if sim_c >= cosine_threshold else 'TIDAK MIRIP'}**")
+    with tab3:
+    st.header("Deteksi Kemiripan Antara Dua Citra")
+    
+    img_path_a = os.path.join(TARGET_IMAGE_DIR, "kecil.jpg")
+    img_path_b = os.path.join(TARGET_IMAGE_DIR, "dewasa.jpg")
+    
+    if not os.path.exists(img_path_a) or not os.path.exists(img_path_b):
+        st.error(f"File 'kecil.jpg' atau 'dewasa.jpg' tidak ditemukan di dalam folder '{TARGET_IMAGE_DIR}'. Pastikan file sudah di-push ke GitHub.")
+    else:
+        st.info("Memproses perbandingan file lokal: `kecil.jpg` dengan `dewasa.jpg`")
+        try:
+            feat_a = detect_and_crop_face(img_path_a).reshape(1, -1)
+            feat_b = detect_and_crop_face(img_path_b).reshape(1, -1)
+            
+            feat_a_pca = pca.transform(feat_a)[0]
+            feat_b_pca = pca.transform(feat_b)[0]
+            
+            dist_e = np.linalg.norm(feat_a_pca - feat_b_pca)
+            sim_c = cosine_similarity(feat_a_pca.reshape(1, -1), feat_b_pca.reshape(1, -1))[0][0]
+            
+            img_a_display = cv2.cvtColor(cv2.imread(img_path_a), cv2.COLOR_BGR2RGB)
+            img_b_display = cv2.cvtColor(cv2.imread(img_path_b), cv2.COLOR_BGR2RGB)
+            st.image([img_a_display, img_b_display], caption=["Foto Masa Kecil (kecil.jpg)", "Foto Masa Dewasa (dewasa.jpg)"], width=240)
+            
+            res_col1, res_col2 = st.columns(2)
+            with res_col1:
+                st.metric(label="Metode A: Jarak Euclidean", value=f"{dist_e:.4f}")
+                st.write("Keputusan: **PROSES EVALUASI**")
+            with res_col2:
+                st.metric(label="Metode B: Cosine Similarity", value=f"{sim_c:.4f}")
+                st.write(f"Keputusan (≥ {cosine_threshold}): **{'MIRIP' if sim_c >= cosine_threshold else 'TIDAK MIRIP'}**")
+                
+        except Exception as e:
+            st.error(f"Gagal memproses gambar: {e}. Pastikan kedua citra memuat objek wajah yang terdeteksi.")
