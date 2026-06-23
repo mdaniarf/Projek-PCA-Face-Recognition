@@ -173,7 +173,8 @@ with tab3:
             
             img_a_display = cv2.cvtColor(cv2.imread(img_path_a), cv2.COLOR_BGR2RGB)
             img_b_display = cv2.cvtColor(cv2.imread(img_path_b), cv2.COLOR_BGR2RGB)
-            st.image([img_a_display, img_b_display], caption=["Foto Masa Kecil", "Foto Masa Dewasa"], width=240)
+            st.image([img_a_display], caption=["Foto Masa Kecil"], width=240)
+            st.image([img_b_display], caption=["Foto Masa Dewasa"], width=240)
             
             res_col1, res_col2 = st.columns(2)
             with res_col1:
