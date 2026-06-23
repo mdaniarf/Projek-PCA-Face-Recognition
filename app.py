@@ -149,13 +149,13 @@ with tab2:
 with tab3:
     st.header("Deteksi Kemiripan Antara Dua Citra")
     
-    img_path_a = os.path.join(TARGET_IMAGE_DIR, "kecil.jpg")
-    img_path_b = os.path.join(TARGET_IMAGE_DIR, "dewasa.jpg")
+    img_path_a = os.path.join(TARGET_IMAGE_DIR, "anak.jpeg")
+    img_path_b = os.path.join(TARGET_IMAGE_DIR, "Dewasa.jpeg")
     
     if not os.path.exists(img_path_a) or not os.path.exists(img_path_b):
-        st.error(f"File 'kecil.jpg' atau 'dewasa.jpg' tidak ditemukan di dalam folder '{TARGET_IMAGE_DIR}'. Pastikan file sudah di-push ke GitHub.")
+        st.error(f"File 'anak.jpeg' atau 'Dewasa.jpeg' tidak ditemukan di dalam folder '{TARGET_IMAGE_DIR}'. Pastikan file sudah di-push ke GitHub.")
     else:
-        st.info("Memproses perbandingan file lokal: `kecil.jpg` dengan `dewasa.jpg`")
+        st.info("Memproses perbandingan file lokal: `anak.jpeg` dengan `Dewasa.jpeg`")
         try:
             feat_a = detect_and_crop_face(img_path_a).reshape(1, -1)
             feat_b = detect_and_crop_face(img_path_b).reshape(1, -1)
